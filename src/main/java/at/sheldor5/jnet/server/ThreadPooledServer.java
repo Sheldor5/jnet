@@ -1,64 +1,54 @@
 package at.sheldor5.jnet.server;
 
-import at.sheldor5.jnet.RequestProcessor;
+import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Created by Michael Palata [github.com/Sheldor5] on 09.12.2015
+ * Created by Michael Palata [github.com/Sheldor5] on 09.12.2015.
  */
-public abstract class ThreadPooledServer {
+public class ThreadPooledServer extends Server {
 
     public static final Logger LOGGER = LogManager.getLogger(ThreadPooledServer.class.getName());
 
-    private ServerSocket server = null;
+    public static final int MAX_THREADS = 100;
+    public static final int DEFAULT_THREADS = 10;
 
-    private final RequestProcessor requestProcessor;
+    private final ExecutorService threadPool;
 
-    public ThreadPooledServer(final RequestProcessor paramRequestProcessor) {
-        requestProcessor = paramRequestProcessor;
-    }
-
-    public void start(final int paramPort) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Starting server on port {} ...", paramPort);
-        }
-        if (null == this.server) {
-            try {
-                this.server = new ServerSocket(paramPort);
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Server started");
-                }
-            } catch (final IOException e) {
-                e.printStackTrace();
-            }
+    public ThreadPooledServer(final int paramPort, final int paramThreads, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException{
+        super(paramPort, paramRequestProcessorFactory);
+        if (paramThreads <= MAX_THREADS) {
+            threadPool = Executors.newFixedThreadPool(paramThreads);
+        } else {
+            LOGGER.warn("Illegal number of request processor threads \"{}\", using default amount of request processor threads of \"\"", paramThreads, DEFAULT_THREADS);
+            threadPool = Executors.newFixedThreadPool(DEFAULT_THREADS);
         }
     }
 
-    public boolean isRunning() {
-        return ((null != this.server) && !this.server.isClosed());
+    public ThreadPooledServer(final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException {
+        this(paramPort, DEFAULT_THREADS, paramRequestProcessorFactory);
     }
 
-    public void stopServer() {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Stopping server ...");
-        }
-        if (this.isRunning() && null != this.server) {
-            if (!this.server.isClosed()) {
+    @Override
+    public void run() {
+        LOGGER.info("Server started");
+        while (running) {
+            while (running) {
                 try {
-                    this.server.close();
-                    this.server = null;
-                    if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug("Server stopped");
-                    }
+                    threadPool.execute(requestProcessorFactory.create(serverSocket.accept()));
                 } catch (final IOException e) {
-                    e.printStackTrace();
+                    if (running) {
+                        LOGGER.error("Error handling request: {}", e.getMessage());
+                    }
                 }
             }
         }
+        LOGGER.info("Server stopped");
     }
 
 }

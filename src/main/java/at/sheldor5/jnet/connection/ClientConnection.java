@@ -8,7 +8,7 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 
 /**
- * Created by Mihcael Palata [github.com/Sheldor5] on 10.12.2015.
+ * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
  *
  * Simple connection object for clients.
  * Receives the response of the desired request and closes the socket.

@@ -118,7 +118,7 @@ public abstract class Connection {
             //LOGGER.debug("Reconnecting to {}:{}", socket.getInetAddress().getHostAddress(), socket.getPort());
             try {
                 writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
-                reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
                 connected = true;
             } catch (final IOException e) {
                 LOGGER.error("Error opening Socket: {}", e.getMessage());

@@ -1,5 +1,6 @@
 package at.sheldor5.jnet.server;
 
+import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -17,8 +18,11 @@ public abstract class Server extends Thread {
     private static final Logger LOGGER = LogManager.getLogger(Server.class.getName());
 
     /**  */
-    public final ServerSocket server;
-    private boolean running = true;
+    public final ServerSocket serverSocket;
+
+    public RequestProcessorFactory requestProcessorFactory;
+
+    protected boolean running = true;
 
     /**
      * Constructor to create the ServerSocket on the desired port.
@@ -26,8 +30,9 @@ public abstract class Server extends Thread {
      * @param paramPort The port on which this server should listen. Port 0 means automatically use the next free port.
      * @throws IOException
      */
-    public Server(final int paramPort) throws IOException {
-        server = new ServerSocket(paramPort);
+    protected Server(final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException {
+        serverSocket = new ServerSocket(paramPort);
+        requestProcessorFactory = paramRequestProcessorFactory;
     }
 
     /**
@@ -37,7 +42,7 @@ public abstract class Server extends Thread {
      * @return
      */
     public final int getPort() {
-        return (running && null != server ? server.getLocalPort() : 0);
+        return (running && null != serverSocket ? serverSocket.getLocalPort() : 0);
     }
 
     /**
@@ -55,9 +60,15 @@ public abstract class Server extends Thread {
     public final void stopServer() {
         running = false;
         try {
-            server.close();
+            serverSocket.close();
         } catch (final IOException e) {
             LOGGER.error("Error closing server: {}", e.getMessage());
+        }
+    }
+
+    public final void setRequestProcessorFactory(final RequestProcessorFactory paramRequestProcessorFactory) {
+        synchronized (requestProcessorFactory) {
+            requestProcessorFactory = paramRequestProcessorFactory;
         }
     }
 
