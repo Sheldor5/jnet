@@ -29,10 +29,6 @@ public abstract class ThreadPooledServer {
         if (null == this.server) {
             try {
                 this.server = new ServerSocket(paramPort);
-                if (null == this.listener) {
-                    this.listener = RequestListener.getInstance(server);
-                }
-                this.listener.startListener();
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Server started");
                 }
@@ -52,9 +48,6 @@ public abstract class ThreadPooledServer {
         }
         if (this.isRunning() && null != this.server) {
             if (!this.server.isClosed()) {
-                if (null != this.listener && this.listener.isAlive()) {
-                    this.listener.stopListener();
-                }
                 try {
                     this.server.close();
                     this.server = null;

@@ -20,6 +20,9 @@ public abstract class RequestListener extends Thread {
     RequestListener(final int paramThreads) {
         if (paramThreads > 0 && paramThreads <= 100) {
             threadPool = Executors.newFixedThreadPool(paramThreads);
+        } else {
+            LOGGER.warn("");
+            threadPool = Executors.newFixedThreadPool(10);
         }
     }
 
