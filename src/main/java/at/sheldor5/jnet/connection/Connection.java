@@ -4,6 +4,8 @@ import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import at.sheldor5.jnet.requestprocessors.*;
 import org.apache.logging.log4j.LogManager;
@@ -26,7 +28,7 @@ public abstract class Connection extends Thread {
     private static final Logger logger = LogManager.getLogger(Connection.class.getName());
 
     /** End Of Request pattern */
-    public static final String EOR = "/!\\EOR/!\\";
+    public static String EOR = "/!\\EOR/!\\";
 
     /** End Of Request pattern including leading and trailing new line character */
     private static final String WR_EOR = "\n" + EOR + "\n";
@@ -37,14 +39,21 @@ public abstract class Connection extends Thread {
     /** Alive Response pattern */
     public static final String ALV_RES = "/!\\ALIVE!/!\\";
 
+    public static String HASH = "/!\\MD5HASH/!\\";
+
+    private static final String WR_HASH = HASH + "\n";
+
     private boolean alive = true;
 
     private Socket socket;
 
     private BufferedWriter writer = null;
     private BufferedReader reader = null;
+    private boolean canHash = true;
 
     private final StringBuilder stringBuilder = new StringBuilder();
+
+    private final Hash md5 = new Hash();
 
     protected int port = 0;
     protected String host = "";
@@ -75,6 +84,7 @@ public abstract class Connection extends Thread {
         if (connected) {
             try {
                 String in;
+                String receivedHash = null;
                 stringBuilder.setLength(0);
                 while (connected) {
                     in = reader.readLine();
@@ -83,22 +93,42 @@ public abstract class Connection extends Thread {
                         return null;
                     } else if (EOR.equals(in)) {
                         // end of this request
+                        logger.debug("<<< {}", in);
                         break;
+                    } else if (HASH.equals(in)) {
+                        // get hash
+                        final String tmp = reader.readLine();
+                        logger.debug("<<< {}", in);
+                        if (null != tmp && tmp.matches("^[a-f0-9]{32}$")) {
+                            receivedHash = tmp;
+                            logger.debug("Received hash was: {}", receivedHash);
+                        } else {
+                            logger.error("Error reading MD5 hash of data: {}", tmp);
+                        }
                     } else if (ALV_REQ.equals(in)) {
                         // requesting if connection is still alive
+                        logger.debug("<<< {}", in);
                         transmit(ALV_RES);
                         break;
                     } else if (ALV_RES.equals(in)) {
                         // requesting if connection is still alive
+                        logger.debug("<<< {}", in);
                         alive = true;
                         break;
                     } else {
                         // default
-                        stringBuilder.append(in).append("\n");
                         logger.debug("<<< {}", in);
+                        stringBuilder.append(in).append("\n");
                     }
                 }
                 data = stringBuilder.toString().trim();
+                if (null != receivedHash) {
+                    final String calculatedHash = md5.getMD5(data);
+                    if (!receivedHash.equals(calculatedHash)) {
+                        logger.error("Error in transmission, hashes doesn't match: {} != {}", receivedHash, calculatedHash);
+                    }
+                    logger.debug("Calculated hash was: {}", calculatedHash);
+                }
             } catch (final SocketTimeoutException e) {
                 if (alive) {
                     alive = false;
@@ -124,11 +154,22 @@ public abstract class Connection extends Thread {
                 logger.error("Error sending data: data is null");
             } else if (paramMessage.contains(WR_EOR)) {
                 logger.error("Error sending data: data contains illegal string \"\\n{}\\n\"", EOR);
+            }  else if (paramMessage.contains(WR_HASH)) {
+                logger.error("Error sending data: data contains illegal string \"\\n{}\\n\"", HASH);
             } else {
-                logger.debug(">>> {}", paramMessage);
+                final String hash = md5.getMD5(paramMessage);
                 try {
-                    writer.write(paramMessage.trim());
+                    if (hash != null) {
+                        writer.write(WR_HASH);
+                        writer.write(hash);
+                        writer.write("\n");
+                        logger.debug(">>> {}", HASH);
+                        logger.debug(">>> {}", hash);
+                    }
+                    writer.write(paramMessage);
                     writer.write(WR_EOR);
+                logger.debug(">>> {}", paramMessage);
+                logger.debug(">>> {}", EOR);
                     writer.flush();
                 } catch (final IOException e) {
                     logger.error("Error sending data: {}", e.getMessage());
