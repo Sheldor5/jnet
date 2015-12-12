@@ -1,6 +1,9 @@
 package at.sheldor5.jnet.server;
 
+import at.sheldor5.jnet.client.ClientHelper;
+import at.sheldor5.jnet.connection.ClientConnection;
 import at.sheldor5.jnet.requestprocessors.EchoRequestProcessorFactory;
+import at.sheldor5.jnet.requestprocessors.EmptyRequestProcessorFactory;
 import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,19 +23,17 @@ import java.util.Map;
  */
 public class SingleThreadServerTest {
 
-    private static final Logger LOGGER = LogManager.getLogger(SingleThreadServerTest.class.getName());
+    private final String host = "localhost";
+    private final int port = 8080;
+
+    private final int clients = 5;
 
     private final RequestProcessorFactory requestProcessorFactory = new EchoRequestProcessorFactory();
 
     private SingleThreadServer server;
 
-    private final String host = "localhost";
-    private final int port = 1337;
-
-
     @Before
     public void prepareTest() {
-        TestUtils.printTestBanner("T E S T I N G   S I N G L E   T H R E A D   S E R V E R   -   E C H O   R P");
         Configurator.setRootLevel(Level.DEBUG);
         try {
             server = new SingleThreadServer(port, requestProcessorFactory);
@@ -44,10 +45,14 @@ public class SingleThreadServerTest {
 
     @Test
     public void testEchoServer() {
-        final Responses responses = new Responses(host, port);
-        final Map<String, String> map = responses.getResponses(TestUtils.ECHO_REQUESTS);
-        TestUtils.printCommunication(map, LOGGER);
-        System.out.println(responses.getAverageResponseTime() + "ms");
+        TestUtils.printTestBanner("T E S T I N G   S I N G L E   T H R E A D   S E R V E R   -   E C H O");
+        final ClientHelper clientHelper = new ClientHelper(host, port, TestUtils.ECHO_REQUESTS);
+        clientHelper.start();
+        try {
+            clientHelper.join();
+        } catch (final InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     @After

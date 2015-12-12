@@ -1,11 +1,11 @@
 package at.sheldor5.jnet.connection;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import at.sheldor5.jnet.requestprocessors.EmptyRequestProcessor;
+import at.sheldor5.jnet.requestprocessors.DataProcessor;
+import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
 
 /**
  * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
@@ -15,32 +15,57 @@ import java.net.SocketTimeoutException;
  */
 public class ServerConnection extends Connection {
 
-    private static final Logger LOGGER = LogManager.getLogger(ServerConnection.class.getName());
+    private DataProcessor requestProcessor;
 
     public ServerConnection() {
-        super(null);
+        this(null);
     }
 
-    public ServerConnection(final Socket paramSocket) {
+    public ServerConnection(final RequestProcessorFactory paramRequestProcessorFactory) {
+        this(null, paramRequestProcessorFactory);
+    }
+
+    public ServerConnection(final Socket paramSocket, final RequestProcessorFactory paramRequestProcessorFactory) {
         super(paramSocket);
+        if (null == paramRequestProcessorFactory) {
+            requestProcessor = new EmptyRequestProcessor();
+        } else {
+            requestProcessor = paramRequestProcessorFactory.create();
+        }
     }
 
-    public ServerConnection(final String paramHost, final int paramPort) throws IOException {
+    public ServerConnection(final String paramHost, final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException {
         super(paramHost, paramPort);
+        if (null == paramRequestProcessorFactory) {
+            requestProcessor = new EmptyRequestProcessor();
+        } else {
+            requestProcessor = paramRequestProcessorFactory.create();
+        }
     }
 
     @Override
-    protected final boolean onTimeOut(SocketTimeoutException e) {
-        LOGGER.error("Error reading data: reader timed out");
-        return true;
+    public void manageConnection() {
+        while (processNextRequest()) {
+            //
+        }
     }
 
-    public final String getRequest() {
-        return receive();
+    public final synchronized boolean processNextRequest() {
+        final String request = receive();
+        if (request != null) {
+            transmit(requestProcessor.process(request));
+            return true;
+        }
+        return false;
     }
 
-    public final void sendResponse(final String paramResponse) {
-        transmit(paramResponse);
+    public final void setRequestProcessorFactory(final RequestProcessorFactory paramRequestProcessorFactory) {
+        if (null != paramRequestProcessorFactory) {
+            requestProcessor = paramRequestProcessorFactory.create();
+        }
+    }
+
+    public final void closeConnection() {
         close();
     }
 }

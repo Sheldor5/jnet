@@ -15,7 +15,7 @@ import java.net.ServerSocket;
 public abstract class Server extends Thread {
 
     /** Class logger. */
-    private static final Logger LOGGER = LogManager.getLogger(Server.class.getName());
+    private final Logger logger = LogManager.getLogger(Server.class.getName());
 
     /**  */
     public final ServerSocket serverSocket;
@@ -23,6 +23,9 @@ public abstract class Server extends Thread {
     public RequestProcessorFactory requestProcessorFactory;
 
     protected boolean running = true;
+    protected boolean connectionTimeOutIsSet = false;
+
+    protected int connectionTimeOut = 0;
 
     /**
      * Constructor to create the ServerSocket on the desired port.
@@ -62,7 +65,7 @@ public abstract class Server extends Thread {
         try {
             serverSocket.close();
         } catch (final IOException e) {
-            LOGGER.error("Error closing server: {}", e.getMessage());
+            logger.error("Error closing server: {}", e.getMessage());
         }
     }
 
@@ -70,6 +73,11 @@ public abstract class Server extends Thread {
         synchronized (requestProcessorFactory) {
             requestProcessorFactory = paramRequestProcessorFactory;
         }
+    }
+
+    public final void setConnectionTimeOut(final int paramMillis) {
+        connectionTimeOutIsSet = true;
+        connectionTimeOut = paramMillis;
     }
 
     /**

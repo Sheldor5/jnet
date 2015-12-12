@@ -5,6 +5,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
+import at.sheldor5.jnet.requestprocessors.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -12,100 +13,180 @@ import org.apache.logging.log4j.Logger;
  * Created by Michael Palata [github.com/Sheldor5] on 09.12.2015.
  *
  * Class to handle basic read/write operations on sockets.
- * The socket and his Input- and OutputStream is kept open until close() is called.
+ * The socket and his Input- and OutputStream is kept open until #close() is called or a time out occures.
+ *
+ * The default #run() of the extended Thread will permanently wait for a request and responses with
+ * the result from the @RequestProcessor.
+ *
+ * By default this connection is best used for server side sockets.
  */
-public abstract class Connection {
+public abstract class Connection extends Thread {
 
-    private static final Logger LOGGER = LogManager.getLogger(Connection.class.getName());
+    /** Logger */
+    private static final Logger logger = LogManager.getLogger(Connection.class.getName());
 
-    public static final String EOM = "/EOM";
+    /** End Of Request pattern */
+    public static final String EOR = "/!\\EOR/!\\";
 
-    private static final String WR_EOM = "\n" + EOM + "\n";
+    /** End Of Request pattern including leading and trailing new line character */
+    private static final String WR_EOR = "\n" + EOR + "\n";
 
-    public Socket socket = null;
+    /** Alive Request pattern */
+    public static final String ALV_REQ = "/!\\ALIVE?/!\\";
+
+    /** Alive Response pattern */
+    public static final String ALV_RES = "/!\\ALIVE!/!\\";
+
+    private boolean alive = true;
+
+    private Socket socket;
 
     private BufferedWriter writer = null;
     private BufferedReader reader = null;
 
     private final StringBuilder stringBuilder = new StringBuilder();
-    private String lastInput = "";
-    private String lastOutput = "";
-    private String in = "";
-    private String data = null;
 
-    private volatile boolean connected = false;
+    protected int port = 0;
+    protected String host = "";
+
+    protected volatile boolean connected = false;
 
     protected Connection(final Socket paramSocket) {
         connect(paramSocket);
     }
 
-    protected Connection(final String paramHost, final int paramPort) throws IOException {
-        this(new Socket(paramHost, paramPort));
-    }
-
-    /**
-     * Handle read time out.
-     *
-     * @param e the thrown SocketTimeoutException.
-     * @return if the connection should be closed or not.
-     */
-    protected abstract boolean onTimeOut(final SocketTimeoutException e);
-
-    protected final void transmit(final String paramMessage) {
-        if (connected) {
-            if (null == paramMessage) {
-                LOGGER.error("Error sending data: data is null");
-            }
-            else if (paramMessage.contains(WR_EOM)) {
-                LOGGER.error("Error sending data: data contains illegal string \"\\n{}\\n\"", EOM);
-            } else {
-                try {
-                    writer.write(paramMessage);
-                    writer.write(WR_EOM);
-                    writer.flush();
-                    lastOutput = paramMessage;
-                } catch (final IOException e) {
-                    LOGGER.error("Error sending data: {}", e.getMessage());
-                }
-            }
-        } else {
-            LOGGER.error("Error sending data: not connected");
+    protected Connection(final String paramHost, final int paramPort) {
+        try {
+            socket = new Socket(paramHost, paramPort);
+            connect(socket);
+        } catch (final IOException e) {
+            logger.error("Error connecting socket: {}", e.getMessage());
+            connected = false;
         }
     }
 
-    protected final String receive() {
+    /**
+     * Reads the next data set from the underlying socket.
+     *
+     * @return String representation of the incoming data, empty string if incoming data is no response of a specific request. Null if connection was closed or timed out.
+     */
+    protected final synchronized String receive() {
+        String data = null;
         if (connected) {
             try {
+                String in;
                 stringBuilder.setLength(0);
-                while (true) {
+                while (connected) {
                     in = reader.readLine();
-                    if (null == in || EOM.equals(in)) {
+                    if (null == in) {
+                        // connection closed from other side
+                        return null;
+                    } else if (EOR.equals(in)) {
+                        // end of this request
                         break;
+                    } else if (ALV_REQ.equals(in)) {
+                        // requesting if connection is still alive
+                        transmit(ALV_RES);
+                        break;
+                    } else if (ALV_RES.equals(in)) {
+                        // requesting if connection is still alive
+                        alive = true;
+                        break;
+                    } else {
+                        // default
+                        stringBuilder.append(in).append("\n");
+                        logger.debug("<<< {}", in);
                     }
-                    stringBuilder.append(in).append("\n");
                 }
                 data = stringBuilder.toString().trim();
-                lastInput = data;
             } catch (final SocketTimeoutException e) {
-                data = null;
-                if (onTimeOut(e)) {
+                if (alive) {
+                    alive = false;
+                    transmit(ALV_REQ);
+                    return "";
+                } else {
+                    logger.error("Connection timed out, closing connection");
                     close();
                 }
             } catch (final IOException e) {
-                LOGGER.error("Error receiving data: {}", e.getMessage());
+                logger.error("Error receiving data: {}", e.getMessage());
             }
         } else {
-            LOGGER.error("Error receiving data: not connected");
+            logger.error("Error receiving data: not connected");
+            return null;
         }
         return data;
     }
 
-    public final String getLastInput() {
-        return lastInput;
+    protected final synchronized void transmit(final String paramMessage) {
+        if (connected) {
+            if (null == paramMessage) {
+                logger.error("Error sending data: data is null");
+            } else if (paramMessage.contains(WR_EOR)) {
+                logger.error("Error sending data: data contains illegal string \"\\n{}\\n\"", EOR);
+            } else {
+                logger.debug(">>> {}", paramMessage);
+                try {
+                    writer.write(paramMessage.trim());
+                    writer.write(WR_EOR);
+                    writer.flush();
+                } catch (final IOException e) {
+                    logger.error("Error sending data: {}", e.getMessage());
+                }
+            }
+        } else {
+            logger.error("Error sending data: not connected");
+        }
     }
 
-    public final String getLastOutput() {
-        return lastOutput;
+    protected final void close() {
+        connected = false;
+        try {
+            if (null != writer) {
+                writer.close();
+            }
+        } catch (final IOException e) {
+            logger.error("Error closing OutputStream: {}", e.getMessage());
+        }
+
+        try {
+            if (null != reader) {
+                reader.close();
+            }
+        } catch (final IOException e) {
+            logger.error("Error closing InputStream: {}", e.getMessage());
+        }
+
+        if (null != socket && !socket.isClosed()) {
+            try {
+                socket.close();
+            } catch (final IOException e) {
+                logger.error("Error closing Socket: {}", e.getMessage());
+            }
+        }
+    }
+
+    public final void run() {
+        while (connected) {
+            manageConnection();
+        }
+        close();
+    }
+
+    public abstract void manageConnection();
+
+    public final boolean isConnected() {
+        return connected;
+    }
+
+    public final void setTimeOut(final int paramTimeOutMillis) {
+        if (connected) {
+            try {
+                socket.setSoTimeout(paramTimeOutMillis);
+            } catch (final SocketException e) {
+                logger.error("Error setting socket time out: {}", e.getMessage());
+            }
+        }
     }
 
     public final void connect(final Socket paramSocket) {
@@ -115,14 +196,15 @@ public abstract class Connection {
         }
         if (null != paramSocket) {
             socket = paramSocket;
-            //LOGGER.debug("Reconnecting to {}:{}", socket.getInetAddress().getHostAddress(), socket.getPort());
             try {
                 writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), "UTF-8"));
                 reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+                host = paramSocket.getInetAddress().getHostAddress();
+                port = paramSocket.getPort();
                 connected = true;
             } catch (final IOException e) {
-                LOGGER.error("Error opening Socket: {}", e.getMessage());
                 connected = false;
+                logger.error("Error opening Socket: {}", e.getMessage());
             }
         }
     }
@@ -135,50 +217,11 @@ public abstract class Connection {
         try {
             connect(new Socket(paramHost, paramPort));
         } catch (final IOException e) {
-            LOGGER.error("Error opening Socket: {}", e.getMessage());
+            logger.error("Error opening Socket: {}", e.getMessage());
         }
     }
 
-    protected final void close() {
-        //LOGGER.debug("Closing connection ...");
-        connected = false;
-        try {
-            if (null != writer) {
-                writer.close();
-            }
-        } catch (final IOException e) {
-            LOGGER.error("Error closing OutputStream: {}", e.getMessage());
-        }
-
-        try {
-            if (null != reader) {
-                reader.close();
-            }
-        } catch (final IOException e) {
-            LOGGER.error("Error closing InputStream: {}", e.getMessage());
-        }
-
-        if (null != socket && !socket.isClosed()) {
-            try {
-                socket.close();
-            } catch (final IOException e) {
-                LOGGER.error("Error closing Socket: {}", e.getMessage());
-            }
-        }
-        //LOGGER.debug("Connection closed");
-    }
-
-    public final boolean isConnected() {
-        return connected;
-    }
-
-    public final void setTimeOut(final int paramTimeOutMillis) {
-        if (connected && null != socket) {
-            try {
-                socket.setSoTimeout(paramTimeOutMillis);
-            } catch (final SocketException e) {
-                LOGGER.error("Error setting socket time out: {}", e.getMessage());
-            }
-        }
+    public final void reconnect() {
+        connect(host, port);
     }
 }

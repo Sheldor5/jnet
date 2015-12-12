@@ -1,6 +1,10 @@
 package at.sheldor5.jnet.server;
 
 import at.sheldor5.jnet.TestUtils;
+import at.sheldor5.jnet.client.Client;
+import at.sheldor5.jnet.client.ClientHelper;
+import at.sheldor5.jnet.connection.ClientConnection;
+import at.sheldor5.jnet.connection.Request;
 import at.sheldor5.jnet.requestprocessors.EchoRequestProcessorFactory;
 import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 import org.apache.logging.log4j.Level;
@@ -13,25 +17,27 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
  */
 public class ThreadPooledServerTest {
 
-    private static final Logger LOGGER = LogManager.getLogger(ThreadPooledServerTest.class.getName());
+    private final String host = "localhost";
+    private final int port = 1337;
+
+    private final int maxClients = 5;
 
     private final RequestProcessorFactory requestProcessorFactory = new EchoRequestProcessorFactory();
 
-    private final String host = "localhost";
-    private final int port = 8080;
+    private final List<ClientHelper> clients = new ArrayList<>();
 
     private ThreadPooledServer server;
 
     @Before
     public void prepareTest() {
-        TestUtils.printTestBanner("T E S T I N G   T H R E A D   P O O L E D   S E R V E R   -   E C H O   -   R P");
         Configurator.setRootLevel(Level.DEBUG);
         try {
             server = new ThreadPooledServer(port, requestProcessorFactory);
@@ -42,11 +48,20 @@ public class ThreadPooledServerTest {
     }
 
     @Test
-    public void testThreadPooledServer() {
-        final Responses responses = new Responses(host, port);
-        final Map<String, String> map = responses.getResponses(TestUtils.ECHO_REQUESTS);
-        TestUtils.printCommunication(map, LOGGER);
-        System.out.println(responses.getAverageResponseTime() + "ms");
+    public void testThreadPooledEchoServer() {
+        TestUtils.printTestBanner("T E S T I N G   T H R E A D   P O O L E D   S E R V E R   -   E C H O");
+        for (int i = 0; i < maxClients; i++) {
+            final ClientHelper clientHelper = new ClientHelper(host, port, TestUtils.ECHO_REQUESTS);
+            clientHelper.start();
+            clients.add(clientHelper);
+        }
+        for (final ClientHelper client : clients) {
+            try {
+                client.join();
+            } catch (final InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @After

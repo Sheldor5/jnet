@@ -1,11 +1,14 @@
 package at.sheldor5.jnet.connection;
 
+import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
@@ -15,30 +18,76 @@ import java.net.SocketTimeoutException;
  */
 public class ClientConnection extends Connection {
 
-    private static final Logger LOGGER = LogManager.getLogger(ClientConnection.class.getName());
+    /** Logger */
+    private static final Logger logger = LogManager.getLogger(ClientConnection.class.getName());
+
+    private final Map<Integer, Request> requests = new ConcurrentHashMap<>();
+    private final List<Request> failedRequests = new ArrayList<>();
+
+    private String successfulResponse = "HTTP/1.1 200 OK";
+
+    private int current = 0;
+    private int failed = 0;
 
     public ClientConnection() {
         super(null);
     }
 
-    protected ClientConnection(String paramHost, int paramPort) throws IOException {
-        super(paramHost, paramPort);
-    }
-
-    protected ClientConnection(Socket paramSocket) {
+    public ClientConnection(Socket paramSocket) {
         super(paramSocket);
     }
 
+    public ClientConnection(String paramHost, int paramPort) {
+        super(paramHost, paramPort);
+    }
+
     @Override
-    protected boolean onTimeOut(SocketTimeoutException e) {
-        LOGGER.error("Error reading data: reader timed out");
-        return true;
+    public final void manageConnection() {
+        while (!requests.isEmpty()) {
+            logger.debug("Client started");
+            for (int i : requests.keySet()) {
+                final Request request = requests.get(i);
+                transmit(request.getRequest());
+                final String response = receive();
+                if (null != response) {
+                    request.setResponse(response);
+                    requests.remove(i);
+                } else if (request.fails()) {
+                    failedRequests.add(request);
+                    requests.remove(i);
+                    failed++;
+                }
+            }
+        }
     }
 
     public final String getResponse(final String paramRequest) {
         transmit(paramRequest);
-        final String response = receive();
+        return receive();
+    }
+
+    public final synchronized Request send(final String paramData) {
+        final Request request = new Request(paramData);
+        if (current == Integer.MAX_VALUE - 1) {
+            current = 0;
+        }
+        requests.put(current++, request);
+        return request;
+    }
+
+    public final boolean hasRequestsLeft() {
+        return !requests.isEmpty();
+    }
+
+    public final int getFailedRequestCount() {
+        return failed;
+    }
+
+    public final List<Request> getFailedRequests() {
+        return failedRequests;
+    }
+
+    public final void closeConnection() {
         close();
-        return response;
     }
 }
