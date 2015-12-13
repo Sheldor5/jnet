@@ -1,15 +1,10 @@
 package at.sheldor5.jnet.server;
 
 import at.sheldor5.jnet.TestUtils;
-import at.sheldor5.jnet.client.Client;
 import at.sheldor5.jnet.client.ClientHelper;
-import at.sheldor5.jnet.connection.ClientConnection;
-import at.sheldor5.jnet.connection.Request;
-import at.sheldor5.jnet.requestprocessors.EchoRequestProcessorFactory;
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.EchoRequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
 import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.After;
 import org.junit.Assert;
@@ -52,8 +47,8 @@ public class ThreadPooledServerTest {
         TestUtils.printTestBanner("T E S T I N G   T H R E A D   P O O L E D   S E R V E R   -   E C H O");
         for (int i = 0; i < maxClients; i++) {
             final ClientHelper clientHelper = new ClientHelper(host, port, TestUtils.ECHO_REQUESTS);
-            clientHelper.start();
             clients.add(clientHelper);
+            clientHelper.start();
         }
         for (final ClientHelper client : clients) {
             try {

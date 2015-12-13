@@ -1,12 +1,8 @@
 package at.sheldor5.jnet.server;
 
 import at.sheldor5.jnet.client.ClientHelper;
-import at.sheldor5.jnet.connection.ClientConnection;
-import at.sheldor5.jnet.requestprocessors.EchoRequestProcessorFactory;
-import at.sheldor5.jnet.requestprocessors.EmptyRequestProcessorFactory;
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import at.sheldor5.jnet.processors.requests.EchoRequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
 import org.junit.Before;
 import org.junit.After;
 import org.junit.Test;
@@ -16,7 +12,6 @@ import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.Assert;
 
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
@@ -37,6 +32,7 @@ public class SingleThreadServerTest {
         Configurator.setRootLevel(Level.DEBUG);
         try {
             server = new SingleThreadServer(port, requestProcessorFactory);
+            server.setConnectionTimeOut(1000);
             server.start();
         } catch (final IOException e) {
             Assert.fail();
@@ -47,6 +43,8 @@ public class SingleThreadServerTest {
     public void testEchoServer() {
         TestUtils.printTestBanner("T E S T I N G   S I N G L E   T H R E A D   S E R V E R   -   E C H O");
         final ClientHelper clientHelper = new ClientHelper(host, port, TestUtils.ECHO_REQUESTS);
+        clientHelper.setKeepOpen(true);
+        clientHelper.setKeepOpenFor(10000);
         clientHelper.start();
         try {
             clientHelper.join();

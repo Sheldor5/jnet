@@ -1,7 +1,7 @@
 package at.sheldor5.jnet.server;
 
 import at.sheldor5.jnet.connection.ServerConnection;
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

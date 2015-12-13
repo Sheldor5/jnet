@@ -1,6 +1,6 @@
 package at.sheldor5.jnet.server;
 
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -23,8 +23,8 @@ public abstract class Server extends Thread {
     public RequestProcessorFactory requestProcessorFactory;
 
     protected boolean running = true;
-    protected boolean connectionTimeOutIsSet = false;
 
+    protected boolean connectionTimeOutIsSet = false;
     protected int connectionTimeOut = 0;
 
     /**

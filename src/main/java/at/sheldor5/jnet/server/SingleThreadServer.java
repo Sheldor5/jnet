@@ -1,8 +1,8 @@
 package at.sheldor5.jnet.server;
 
 import at.sheldor5.jnet.connection.ServerConnection;
-import at.sheldor5.jnet.requestprocessors.DataProcessor;
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessor;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -18,7 +18,7 @@ public class SingleThreadServer extends Server {
 
     private final Logger logger = LogManager.getLogger(SingleThreadServer.class.getName());
 
-    private final DataProcessor requestProcessor;
+    private final RequestProcessor requestProcessor;
 
     public SingleThreadServer(final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException {
         super(paramPort, paramRequestProcessorFactory);
@@ -31,12 +31,13 @@ public class SingleThreadServer extends Server {
         while (running) {
             try {
                 final Socket client = serverSocket.accept();
+                logger.info("New client accepted");
                 if (connectionTimeOutIsSet) {
                     client.setSoTimeout(connectionTimeOut);
                 }
                 connection.connect(client);
-                while (connection.processNextRequest()) {
-                    // nop
+                while (connection.isConnected()) {
+                    connection.manageConnection();
                 }
             } catch (final Exception e) {
                 if (running) {

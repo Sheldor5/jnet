@@ -1,62 +1,57 @@
 package at.sheldor5.jnet.connection;
 
-import at.sheldor5.jnet.requestprocessors.EmptyRequestProcessor;
-import at.sheldor5.jnet.requestprocessors.DataProcessor;
-import at.sheldor5.jnet.requestprocessors.RequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.EmptyRequestProcessor;
+import at.sheldor5.jnet.processors.requests.EmptyRequestProcessorFactory;
+import at.sheldor5.jnet.processors.requests.RequestProcessor;
+import at.sheldor5.jnet.processors.requests.RequestProcessorFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
 import java.net.Socket;
 
 /**
  * Created by Michael Palata [github.com/Sheldor5] on 10.12.2015.
  *
- * Simple connection object for servers.
- * Receives the request and responses with the desired response and closes the socket.
+ * Server side connection to handle incoming requests.
  */
 public class ServerConnection extends Connection {
 
-    private DataProcessor requestProcessor;
+    private final Logger logger = LogManager.getLogger(ServerConnection.class.getName());
+
+    private RequestProcessor requestProcessor;
 
     public ServerConnection() {
         this(null);
     }
 
-    public ServerConnection(final RequestProcessorFactory paramRequestProcessorFactory) {
-        this(null, paramRequestProcessorFactory);
+    public ServerConnection(final Socket paramSocket) {
+        this(paramSocket, new EmptyRequestProcessorFactory());
     }
 
     public ServerConnection(final Socket paramSocket, final RequestProcessorFactory paramRequestProcessorFactory) {
         super(paramSocket);
-        if (null == paramRequestProcessorFactory) {
-            requestProcessor = new EmptyRequestProcessor();
-        } else {
-            requestProcessor = paramRequestProcessorFactory.create();
-        }
+        setLogger(logger);
+        setRequestProcessorFactory(paramRequestProcessorFactory);
     }
 
-    public ServerConnection(final String paramHost, final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) throws IOException {
+    public ServerConnection(final String paramHost, final int paramPort) {
+        this(paramHost, paramPort, new EmptyRequestProcessorFactory());
+    }
+
+    public ServerConnection(final String paramHost, final int paramPort, final RequestProcessorFactory paramRequestProcessorFactory) {
         super(paramHost, paramPort);
-        if (null == paramRequestProcessorFactory) {
-            requestProcessor = new EmptyRequestProcessor();
-        } else {
-            requestProcessor = paramRequestProcessorFactory.create();
-        }
+        setLogger(logger);
+        setRequestProcessorFactory(paramRequestProcessorFactory);
     }
 
     @Override
-    public void manageConnection() {
-        while (processNextRequest()) {
-            //
-        }
-    }
-
-    public final synchronized boolean processNextRequest() {
+    public final void manageConnection() {
         final String request = receive();
-        if (request != null) {
+        if (request == null) {
+            connected = false;
+        } else {
             transmit(requestProcessor.process(request));
-            return true;
         }
-        return false;
     }
 
     public final void setRequestProcessorFactory(final RequestProcessorFactory paramRequestProcessorFactory) {
@@ -66,6 +61,6 @@ public class ServerConnection extends Connection {
     }
 
     public final void closeConnection() {
-        close();
+        connected = false;
     }
 }

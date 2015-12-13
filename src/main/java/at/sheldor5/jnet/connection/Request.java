@@ -44,4 +44,8 @@ public class Request {
         return failed;
     }
 
+    public final void failed(final boolean paramFailed) {
+        failed = paramFailed;
+    }
+
 }
